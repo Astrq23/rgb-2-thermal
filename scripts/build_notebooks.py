@@ -69,6 +69,10 @@ SETUP_CELL = f'''
 # --- Pull the project code from GitHub -------------------------------------
 # Requires "Internet" to be ON in the notebook settings panel on the right.
 REPO_URL = "{REPO_URL}"
+
+# `main` is the stable branch. Work merged only as far as `dev` will not appear
+# here until dev is merged into main -- set this to "dev" to test unreleased
+# changes rather than pushing them to main.
 BRANCH   = "main"
 
 import os, subprocess, sys
