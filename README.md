@@ -47,6 +47,49 @@ không chỉ "có khớp đúng frame ground-truth này không?".
 
 ---
 
+## Dataset quá nặng? Xuất một bản subset dùng lại mãi
+
+Bốn dataset gốc nặng hàng chục GB, mà phần lớn là **độ phân giải bị vứt đi ngay**:
+DroneVehicle gửi ảnh 840x712 rồi train cắt xuống 256x256. Mỗi session Kaggle đều
+phải trả giá attach cho toàn bộ độ phân giải đó, rồi lại decode nó ở mỗi epoch.
+
+Chạy **một lần duy nhất** (khi đã attach dataset gốc):
+
+```bash
+python scripts/export_subset.py \
+    --manifest /kaggle/working/manifest.csv \
+    --out /kaggle/working/subset \
+    --per-dataset 8000
+```
+
+Script áp dụng sẵn phần hình học của từng dataset (cắt viền, FOV crop), resize về
+288px, và ghi ra một thư mục thường nhỏ hơn **20–50 lần**. Sau đó:
+
+1. **Save Version → Save & Run All**
+2. Publish output thành Kaggle Dataset của bạn
+3. Từ đó về sau chỉ attach dataset nhỏ này:
+
+```bash
+python scripts/build_manifest.py \
+    --dataset-specs 'configs/datasets/subset*.yaml' \
+    --out /kaggle/working/manifest.csv
+```
+
+Session khởi động trong vài giây, và DataLoader không còn là nút thắt.
+
+Metadata được mã hoá trong đường dẫn (`<dataset>/rgb/<group>~<seq>.jpg`) nên bản
+subset **giữ nguyên** tên dataset gốc, trọng số lấy mẫu, bảng chỉ số tách theo
+dataset, và cả nhóm scene chống rò rỉ split. Dữ liệu thermal-only (HIT-UAV) đi
+vào `reference/` và vẫn dùng được cho FID không cặp.
+
+> Attach subset **hoặc** dataset gốc, đừng attach cả hai — nếu không mỗi mẫu sẽ
+> vào manifest hai lần.
+
+Nếu vẫn muốn nhanh hơn nữa: bỏ `flir_v2` (`enabled: false`). Nó nặng nhất, căn
+chỉnh kém nhất, và chỉ chiếm 10% trọng số.
+
+---
+
 ## Vấn đề cốt lõi: chuẩn hóa dữ liệu
 
 Bốn dataset tổ chức hoàn toàn khác nhau:
@@ -181,6 +224,7 @@ python scripts/train.py --config configs/smoke.yaml     # smoke run ~2 phút
 python scripts/train.py --config configs/pix2pix_uav.yaml --resume auto
 python scripts/evaluate.py --checkpoint outputs/pix2pix_uav/checkpoints/best.pt
 python scripts/predict.py --checkpoint ... --input anh/ --colormap inferno
+python scripts/export_subset.py --manifest manifest.csv --out subset   # gọn hoá dataset
 ```
 
 Mọi giá trị config đều override được từ dòng lệnh:
@@ -197,8 +241,19 @@ Gõ sai tên key sẽ báo lỗi ngay thay vì bị bỏ qua âm thầm — mộ
 
 ## Chạy quá 12 giờ của Kaggle
 
-Session Kaggle bị kill ở mốc 12 giờ, không báo trước. Checkpoint được lưu sau mỗi
-epoch kèm **đủ trạng thái**: hai network, hai optimizer, hai scheduler, AMP scaler,
+Session Kaggle bị kill ở mốc 12 giờ, không báo trước. Đặt ngân sách thời gian để
+run tự dừng sạch **trước** khi bị kill, thay vì mất nguyên epoch đang chạy:
+
+```bash
+python scripts/train.py --config configs/pix2pix_uav.yaml --resume auto \
+    --set train.max_hours=11
+```
+
+Sau epoch đầu tiên, trainer in **throughput đo được (img/s)** và **ETA** cho số
+epoch còn lại — nên bạn biết run có vừa session hay không sau vài phút, thay vì
+đoán.
+
+Checkpoint được lưu sau mỗi epoch kèm **đủ trạng thái**: hai network, hai optimizer, hai scheduler, AMP scaler,
 số epoch và RNG state — nên khi resume, đường loss không bị gãy khúc.
 
 1. **Save Version → Save & Run All**, đợi chạy xong.

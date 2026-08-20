@@ -69,6 +69,10 @@ SETUP_CELL = f'''
 # --- Pull the project code from GitHub -------------------------------------
 # Requires "Internet" to be ON in the notebook settings panel on the right.
 REPO_URL = "{REPO_URL}"
+
+# `main` is the stable branch. Work merged only as far as `dev` will not appear
+# here until dev is merged into main -- set this to "dev" to test unreleased
+# changes rather than pushing them to main.
 BRANCH   = "main"
 
 import os, subprocess, sys
@@ -211,6 +215,52 @@ for path in sorted(Path("/kaggle/working/outputs/alignment").glob("*.png")):
         ),
         markdown(
             """
+## Optional but recommended: export a compact subset
+
+The source datasets are tens of gigabytes, and most of that is resolution
+training throws away immediately — DroneVehicle ships 840x712 frames that get
+cropped and resized to 256x256. Every session pays the attach cost for the full
+resolution, then decodes it again on every epoch.
+
+Run the export **once**. It bakes in each dataset's geometry (border crop, FOV
+crop), resizes to 288px and writes a folder typically **20–50x smaller**.
+"""
+        ),
+        code(
+            '''
+!python scripts/export_subset.py \\
+    --manifest /kaggle/working/manifest.csv \\
+    --out /kaggle/working/subset \\
+    --per-dataset 8000
+'''
+        ),
+        markdown(
+            """
+Then, to make it reusable:
+
+1. **Save Version → Save & Run All** and wait for it to finish.
+2. From the finished run, publish `/kaggle/working/subset` as a **new Kaggle
+   Dataset** (Notebook Output → Create Dataset). Name it `rgb-thermal-subset`
+   so the default `search_roots` find it.
+3. In every later session attach **only that dataset**, never the originals as
+   well — attaching both would put each sample into the manifest twice. Then:
+
+   ```
+   !python scripts/build_manifest.py \\
+       --dataset-specs 'configs/datasets/subset*.yaml' \\
+       --out /kaggle/working/manifest.csv
+   ```
+
+The subset keeps the source dataset names, the sampling weights, the
+per-dataset metric breakdown and the leakage-free scene groups, because all of
+that travels in the exported path. Thermal-only data (HIT-UAV) goes to
+`reference/` and still serves unpaired FID.
+
+Sessions then start in seconds, and the DataLoader stops being the bottleneck.
+"""
+        ),
+        markdown(
+            """
 **Read the 4th panel** (thermal edges in red over RGB):
 
 - Edges land on buildings, vehicles, road markings → aligned, keep the dataset.
@@ -322,6 +372,13 @@ sizes compare.
 | T4 ×2 instead of P100 | `--set train.batch_size=24 data.num_workers=4` |
 | Out of memory | `--set train.batch_size=8` |
 | Want a first result quickly | `--set train.epochs=10` |
+| Session start is slow | Export a compact subset (notebook 00, last section) |
+
+`train.max_hours=11` above is the safety margin: the run stops itself cleanly
+and checkpoints at 11 hours instead of being killed mid-epoch at 12. After the
+first epoch the trainer prints the **measured throughput (img/s)** and an
+**ETA** for the remaining epochs, so you can tell within minutes whether the
+run fits a session rather than guessing.
 | FLIR failed its alignment check | set `enabled: false` in its YAML, then rebuild the manifest |
 """
         ),
@@ -330,7 +387,8 @@ sizes compare.
 !python scripts/train.py \\
     --config configs/pix2pix_uav.yaml \\
     --manifest /kaggle/working/manifest.csv \\
-    --resume auto
+    --resume auto \\
+    --set train.max_hours=11
 '''
         ),
         markdown("## 4 · Training curves"),

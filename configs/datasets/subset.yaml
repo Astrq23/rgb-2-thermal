@@ -1,0 +1,59 @@
+# Exported subset -- the fast path.
+#
+# Produced by scripts/export_subset.py from the original Kaggle datasets, then
+# published as your own Kaggle Dataset. Attaching a few hundred MB instead of
+# tens of gigabytes turns a slow session start into a fast one, and removes
+# full-resolution JPEG decoding from the training loop.
+#
+# Layout written by the exporter:
+#   <root>/<source_dataset>/rgb/<group>~<seq>.jpg
+#   <root>/<source_dataset>/thermal/<group>~<seq>.jpg
+#
+# The `rgb` / `thermal` folders are resolved by the normal token matcher, so no
+# special adapter is needed. What IS special is that one folder holds samples
+# from several original datasets -- hence dataset_from_regex below, which
+# restores the true source name on every record. Without it everything would
+# collapse into a single dataset called "subset", and both the sampling weights
+# in configs/pix2pix_uav.yaml and the per-dataset metric breakdown would be lost.
+#
+# IMPORTANT: attach the subset OR the originals, never both -- otherwise the
+# same samples enter the manifest twice.
+
+name: subset
+adapter: generic
+enabled: true
+paired: true
+
+viewpoint: mixed              # overridden per source dataset below
+sample_weight: 1.0            # unused: weights are applied per source dataset
+
+search_roots:
+  - /kaggle/input/rgb-thermal-subset
+  - /kaggle/input/*thermal*subset*
+  - /kaggle/input/*rgb*thermal*subset*
+  - subset
+  - data/subset
+
+# Thermal-only sources are handled by subset_reference.yaml instead.
+exclude_globs:
+  - "reference/**"
+
+# Recover the original dataset name from the folder it was exported into.
+dataset_from_regex: '/([A-Za-z0-9_]+)/(?:rgb|thermal)/[^/]+$'
+
+viewpoint_map:
+  dronevehicle: uav_high
+  llvip: elevated
+  flir_v2: ground
+  hituav: uav_high
+
+# The exporter puts the scene group before the `~` in every filename, so the
+# leakage-free split survives the round trip.
+# Single-quoted on purpose: YAML treats backslashes literally inside '...'.
+group_regex: '/([^/~]+)~\d+\.[A-Za-z]+$'
+group_bucket: 100
+
+# Geometry was already applied during export; do not crop twice.
+preprocess:
+  rgb: {}
+  thermal: {}

@@ -94,6 +94,11 @@ class TrainConfig:
     max_steps_per_epoch: int = 0
     #: Stop the whole run after this many optimiser steps. 0 = unlimited.
     max_steps: int = 0
+    #: Wall-clock budget in hours. The run stops cleanly at the next checkpoint
+    #: boundary once this is exceeded. Set it below Kaggle's 12h session ceiling
+    #: so the session ends on our terms, with a saved checkpoint, instead of
+    #: being killed mid-epoch. 0 = no limit.
+    max_hours: float = 0.0
 
 
 @dataclass

@@ -57,7 +57,17 @@ def test_extends_inherits_then_overrides():
 def test_shipped_dataset_specs_all_load():
     specs = load_dataset_specs(["configs/datasets/*.yaml"])
     names = {s.name for s in specs}
-    assert names == {"dronevehicle", "llvip", "flir_v2", "hituav"}
+    # The four Kaggle sources, plus the two specs describing an exported subset
+    # (see scripts/export_subset.py). The subset specs simply find nothing when
+    # no subset is attached.
+    assert names == {
+        "dronevehicle",
+        "llvip",
+        "flir_v2",
+        "hituav",
+        "subset",
+        "subset_reference",
+    }
 
 
 def test_hituav_is_configured_as_reference_only():
@@ -265,3 +275,91 @@ def test_one_training_step_runs_and_checkpoints(small_manifest, tmp_path):
     resumed = Trainer(cfg, train_loader, val_loader, domain_index, device="cpu")
     resumed.resume(checkpoint)
     assert resumed.global_step == summary["global_step"]
+
+
+def test_time_budget_stops_the_run_before_kaggle_does(small_manifest, tmp_path):
+    """A spent budget must end the run cleanly, with a checkpoint on disk.
+
+    Set to zero-plus-epsilon so the very first check trips, standing in for the
+    real case of hitting 11 hours inside a 12-hour session.
+    """
+    from rgb2thermal.engine.trainer import Trainer
+
+    frame, specs = small_manifest
+    cfg = load_config(
+        "configs/smoke.yaml",
+        overrides=[
+            "data.image_size=64", "data.load_size=64", "data.num_workers=0",
+            "data.samples_per_epoch=4", "model.ngf=8", "model.ndf=8", "model.n_down=6",
+            "train.batch_size=2", "train.epochs=10", "train.max_steps=0",
+            "train.amp=false", "train.max_hours=0.000001",
+            f"train.output_dir={tmp_path.as_posix()}",
+        ],
+    )
+    train_loader, val_loader, domains = build_dataloaders(
+        frame, cfg.data, specs, batch_size=cfg.train.batch_size
+    )
+    trainer = Trainer(cfg, train_loader, val_loader, domains, device="cpu")
+    summary = trainer.fit()
+
+    assert summary["stopped_early"] is True
+    assert "budget" in summary["stop_reason"]
+    assert summary["epochs_completed"] < cfg.train.epochs
+    assert (trainer.checkpoint_dir / "last.pt").exists()
+
+
+def test_no_budget_means_no_early_stop(small_manifest, tmp_path):
+    from rgb2thermal.engine.trainer import Trainer
+
+    frame, specs = small_manifest
+    cfg = load_config(
+        "configs/smoke.yaml",
+        overrides=[
+            "data.image_size=64", "data.load_size=64", "data.num_workers=0",
+            "data.samples_per_epoch=4", "model.ngf=8", "model.ndf=8", "model.n_down=6",
+            "train.batch_size=2", "train.epochs=1", "train.max_steps=0",
+            "train.amp=false", "train.max_hours=0",
+            f"train.output_dir={tmp_path.as_posix()}",
+        ],
+    )
+    train_loader, val_loader, domains = build_dataloaders(
+        frame, cfg.data, specs, batch_size=cfg.train.batch_size
+    )
+    trainer = Trainer(cfg, train_loader, val_loader, domains, device="cpu")
+    summary = trainer.fit()
+
+    assert trainer.out_of_time() is False
+    assert summary["stopped_early"] is False
+    assert summary["epochs_completed"] == 1
+
+
+def test_throughput_and_eta_are_reported(small_manifest, tmp_path):
+    """Measured img/s and a projected ETA are what make the budget actionable."""
+    from rgb2thermal.engine.trainer import Trainer
+
+    frame, specs = small_manifest
+    cfg = load_config(
+        "configs/smoke.yaml",
+        overrides=[
+            "data.image_size=64", "data.load_size=64", "data.num_workers=0",
+            "data.samples_per_epoch=4", "model.ngf=8", "model.ndf=8", "model.n_down=6",
+            "train.batch_size=2", "train.epochs=4", "train.max_steps=2",
+            "train.amp=false", f"train.output_dir={tmp_path.as_posix()}",
+        ],
+    )
+    train_loader, val_loader, domains = build_dataloaders(
+        frame, cfg.data, specs, batch_size=cfg.train.batch_size
+    )
+    trainer = Trainer(cfg, train_loader, val_loader, domains, device="cpu")
+
+    assert trainer.eta_hours() is None  # nothing measured yet
+    trainer.fit()
+
+    assert trainer.images_seen > 0
+    eta = trainer.eta_hours()
+    assert eta is not None and eta >= 0
+
+    import pandas as pd
+    metrics = pd.read_csv(trainer.output_dir / "metrics.csv")
+    assert "train_img_per_s" in metrics.columns
+    assert metrics["train_img_per_s"].iloc[0] > 0
