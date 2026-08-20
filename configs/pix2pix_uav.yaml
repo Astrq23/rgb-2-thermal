@@ -1,0 +1,30 @@
+# Main training config: Pix2Pix, UAV-weighted dataset mix.
+# Sized for a single Kaggle P100 inside the 12h session limit.
+
+extends: base.yaml
+name: pix2pix_uav
+
+data:
+  # UAV imagery dominates because that is the deployment domain. LLVIP
+  # contributes night-time contrast and pedestrians; FLIR contributes a
+  # ground-level viewpoint and is kept small because its pairs are the least
+  # well registered.
+  sample_weights:
+    dronevehicle: 0.60
+    llvip: 0.30
+    flir_v2: 0.10
+
+  # One "epoch" is a fixed draw from the weighted mixture rather than a pass
+  # over the concatenated sets -- otherwise the largest dataset would silently
+  # define the epoch length and the weights above would not hold.
+  samples_per_epoch: 20000
+
+  num_workers: 2
+
+train:
+  epochs: 40
+  batch_size: 16
+  lambda_l1: 100.0
+  gan_mode: lsgan
+  amp: true
+  sample_interval: 500

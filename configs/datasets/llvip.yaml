@@ -1,0 +1,38 @@
+# LLVIP -- elevated street-level surveillance, mostly night.
+#   Kaggle: https://www.kaggle.com/datasets/monishshrivastava1/llvip-dataset
+#   Project: https://bupt-ai-cz.github.io/LLVIP/
+#
+# ~15,488 pairs at 1280x1024, captured through a binocular RGB/IR rig, so the
+# registration is the tightest of any source here. Adds night-time scenes and
+# pedestrians that DroneVehicle is comparatively thin on.
+#
+# LICENCE: academic / non-commercial use only. See DATASETS.md.
+
+name: llvip
+adapter: generic
+enabled: true
+paired: true
+
+viewpoint: elevated
+time_of_day: night            # the dataset is explicitly a low-light benchmark
+sample_weight: 0.30
+
+search_roots:
+  - /kaggle/input/llvip-dataset
+  - /kaggle/input/*llvip*
+  - data/raw/llvip
+
+exclude_globs:
+  - "**/*label*/**"
+  - "**/*annotation*/**"
+
+# Filenames look like 010001.jpg / 190001.jpg, where the leading two digits
+# identify one of the 26 capture locations. Grouping on it keeps a location
+# entirely inside one split. If a mirror renames the files the regex simply
+# misses and the frame-bucket fallback takes over.
+group_regex: "/(\\d{2})\\d+\\.[A-Za-z]+$"
+group_bucket: 100
+
+preprocess:
+  rgb: {}
+  thermal: {}

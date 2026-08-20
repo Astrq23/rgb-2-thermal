@@ -1,0 +1,16 @@
+# Runtime dependencies.
+# On Kaggle, torch/torchvision/numpy/pandas/pillow/matplotlib are preinstalled —
+# `pip install -e .` will simply keep the existing versions.
+torch>=2.0
+torchvision>=0.15
+numpy>=1.23
+pandas>=1.5
+pillow>=9.0
+pyyaml>=6.0
+matplotlib>=3.5
+tqdm>=4.64
+torchmetrics>=1.0
+
+# Optional: LPIPS metric backend used by torchmetrics.
+# torchmetrics pulls this in lazily; install it explicitly if LPIPS is enabled.
+lpips>=0.1.4

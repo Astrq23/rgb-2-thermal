@@ -1,0 +1,39 @@
+# HIT-UAV -- high-altitude UAV thermal. EVALUATION ONLY.
+#   Kaggle: https://www.kaggle.com/datasets/pandrii000/hituav-a-highaltitude-infrared-thermal-dataset
+#
+# This dataset has NO paired RGB images, so it cannot train a paired model and
+# is never sampled by the trainer. It earns its place as a *reference
+# distribution*: unpaired FID between our generated thermal and real
+# high-altitude UAV thermal answers the question the paired metrics cannot --
+# "does this look like genuine UAV thermal imagery?", not merely "does it match
+# this particular ground-truth frame?".
+#
+# Every record lands in split=reference. See scripts/evaluate.py.
+
+name: hituav
+adapter: generic
+enabled: true
+paired: false
+
+# Its folders (normal/images/train) carry no modality token, so detection is
+# bypassed and every file is declared thermal.
+force_modality: thermal
+
+viewpoint: uav_high
+time_of_day: unknown
+sample_weight: 0.0            # never sampled during training
+
+search_roots:
+  - /kaggle/input/hituav-a-highaltitude-infrared-thermal-dataset
+  - /kaggle/input/*hituav*
+  - /kaggle/input/*hit-uav*
+  - data/raw/hituav
+
+exclude_globs:
+  - "**/*label*/**"
+  - "**/*annotation*/**"
+
+group_bucket: 100
+
+preprocess:
+  thermal: {}

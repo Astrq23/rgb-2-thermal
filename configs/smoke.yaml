@@ -1,0 +1,26 @@
+# Two-minute end-to-end sanity run. Always run this before a real job:
+# it exercises the manifest, the DataLoader, both networks, the loss, AMP,
+# checkpointing and image dumping, so a real 10-hour run does not die at hour 9
+# on a typo in the sampling code.
+#
+#   python scripts/train.py --config configs/smoke.yaml
+
+extends: pix2pix_uav.yaml
+name: smoke
+
+data:
+  samples_per_epoch: 256
+  limit_val: 64
+  num_workers: 2
+
+train:
+  epochs: 1
+  batch_size: 4
+  max_steps: 50
+  log_interval: 5
+  sample_interval: 25
+
+eval:
+  max_samples: 32
+  # FID needs thousands of samples to mean anything; skip it in a smoke run.
+  metrics: [psnr, ssim]

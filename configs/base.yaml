@@ -1,0 +1,69 @@
+# Defaults shared by every run. Concrete configs `extends: base.yaml` and
+# override only what differs, so there is exactly one place to change a default.
+
+name: base
+
+data:
+  dataset_specs:
+    - configs/datasets/*.yaml
+  manifest: manifest.csv
+
+  image_size: 256
+  load_size: 286          # resize-then-random-crop jitter, as in pix2pix
+  resize_mode: crop       # "crop" keeps aspect ratio; "stretch" squashes
+  hflip: true
+
+  # Per-image 1-99 percentile stretch. This is what lets three different
+  # thermal cameras be trained on jointly -- see src/rgb2thermal/data/normalize.py.
+  thermal_norm: percentile
+  low_percentile: 1.0
+  high_percentile: 99.0
+
+  split_ratios: [0.8, 0.1, 0.1]
+  respect_split_hint: true
+  split_seed: 42
+
+  # Empty = fall back to each dataset's own `sample_weight`.
+  sample_weights: {}
+  samples_per_epoch: 0
+
+  num_workers: 2
+  limit_train: 0
+  limit_val: 0
+
+model:
+  name: pix2pix
+  ngf: 64
+  ndf: 64
+  n_down: 8               # 8 downsamplings = the classic 256x256 U-Net
+  norm: batch
+  dropout: 0.5
+  n_layers_d: 3           # 70x70 PatchGAN receptive field
+  use_domain_embedding: false
+  domain_dim: 32
+
+train:
+  epochs: 40
+  batch_size: 16
+  lr: 0.0002
+  beta1: 0.5
+  beta2: 0.999
+  lambda_l1: 100.0
+  gan_mode: lsgan
+  amp: true
+  lr_decay_start: 0       # 0 = start decaying at epochs // 2
+  seed: 42
+  output_dir: ""          # "" = outputs/ locally, /kaggle/working/outputs on Kaggle
+  resume: ""
+  log_interval: 50
+  sample_interval: 500
+  max_steps_per_epoch: 0
+  max_steps: 0
+
+eval:
+  batch_size: 16
+  split: test
+  metrics: [psnr, ssim, lpips, fid]
+  fid_reference_dataset: hituav
+  max_samples: 0
+  num_visuals: 8

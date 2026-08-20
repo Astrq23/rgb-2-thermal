@@ -1,0 +1,51 @@
+# Teledyne FLIR ADAS Thermal Dataset v2 -- ground-level urban traffic.
+#   Kaggle: https://www.kaggle.com/datasets/samdazel/teledyne-flir-adas-thermal-dataset-v2
+#
+# Adds a viewpoint and scene mix (eye-level traffic) that neither UAV source
+# covers, which is why it is here at all.
+#
+# !! ALIGNMENT WARNING !!
+# FLIR's RGB and thermal cameras have different fields of view and resolutions.
+# Pairs are frame-synchronised but only APPROXIMATELY co-registered, unlike
+# DroneVehicle and LLVIP. `fov_crop` below is a first estimate, not a
+# calibration. Before trusting this source:
+#
+#   python scripts/check_alignment.py --dataset flir_v2
+#
+# and tune `rgb.fov_crop` until the overlay lines up. If it cannot be made to
+# line up, set `enabled: false` -- a misaligned pair actively teaches the model
+# to blur, which is worse than having less data.
+#
+# LICENCE: Teledyne FLIR's own terms, research use. See DATASETS.md.
+
+name: flir_v2
+adapter: flir_adas_v2
+enabled: true
+paired: true
+
+viewpoint: ground
+time_of_day: unknown
+sample_weight: 0.10           # deliberately low: weakest registration of the three
+
+search_roots:
+  - /kaggle/input/teledyne-flir-adas-thermal-dataset-v2
+  - /kaggle/input/*flir*adas*
+  - /kaggle/input/*flir*
+  - data/raw/flir_v2
+
+exclude_globs:
+  - "**/*label*/**"
+  - "**/*annotation*/**"
+
+# Both modalities are named video-<videoId>-frame-<n>-<hash>.jpg with a
+# per-modality hash, so pairing happens on (videoId, frameNumber) in
+# adapters/flir_adas_v2.py. One group per source video.
+group_bucket: 100
+
+preprocess:
+  rgb:
+    # Narrow the wider RGB frame toward the thermal camera's field of view.
+    # TUNE THIS with check_alignment.py before running a real training job.
+    fov_crop: 0.62
+  thermal:
+    fov_crop: 1.0

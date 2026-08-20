@@ -1,0 +1,10 @@
+# The repo is authored on Windows but runs on Kaggle's Linux images.
+# Normalise to LF in the repository so shebangs and heredocs behave there.
+* text=auto eol=lf
+
+# Notebooks are generated JSON; keep diffs readable and merges predictable.
+*.ipynb text eol=lf
+
+*.png binary
+*.jpg binary
+*.pt  binary

@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rgb2thermal"
+version = "0.1.0"
+description = "RGB to thermal image translation for UAV imagery, trained on merged Kaggle datasets"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Hoang Viet" }]
+keywords = ["uav", "thermal", "infrared", "pix2pix", "image-to-image-translation"]
+
+# Kept intentionally light: on Kaggle the heavy stack is already present and we do
+# not want `pip install -e .` to trigger a torch reinstall.
+dependencies = [
+    "numpy>=1.23",
+    "pandas>=1.5",
+    "pillow>=9.0",
+    "pyyaml>=6.0",
+    "tqdm>=4.64",
+]
+
+[project.optional-dependencies]
+train = ["torch>=2.0", "torchvision>=0.15", "matplotlib>=3.5", "torchmetrics>=1.0"]
+dev = ["pytest>=7.0", "ruff>=0.1"]
+
+[project.scripts]
+r2t-inspect = "rgb2thermal.cli:inspect_main"
+r2t-manifest = "rgb2thermal.cli:manifest_main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]

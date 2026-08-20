@@ -1,0 +1,44 @@
+# Data & artifacts (never commit — datasets live on Kaggle)
+data/
+outputs/
+checkpoints/
+runs/
+*.pt
+*.pth
+*.ckpt
+*.npy
+*.npz
+manifest.csv
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.python-version
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Secrets
+kaggle.json
+.env

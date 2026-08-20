@@ -1,0 +1,44 @@
+# DroneVehicle -- the core UAV source for this project.
+#   Kaggle: https://www.kaggle.com/datasets/brendanalvey/visdrone-dronevehicle
+#   Paper:  Drone-based RGB-Infrared Cross-Modality Vehicle Detection (VisDrone)
+#
+# ~28,439 aligned RGB/IR pairs shot from a drone, day and night.
+# Upstream layout: train/trainimg + train/trainimgr, val/valimg + val/valimgr, ...
+# The `img` / `imgr` folder names are resolved by the token matcher, so this
+# adapter needs no Python code -- only the border fix below.
+
+name: dronevehicle
+adapter: generic
+enabled: true
+paired: true
+
+viewpoint: uav_high
+time_of_day: unknown          # dataset mixes day and night; not inferable from path
+sample_weight: 0.60           # dominant source: this is the target domain
+
+search_roots:
+  - /kaggle/input/visdrone-dronevehicle
+  - /kaggle/input/dronevehicle-dataset-yolov11-obb
+  - /kaggle/input/*dronevehicle*
+  - /kaggle/input/*drone-vehicle*
+  - data/raw/dronevehicle
+
+# Label folders hold XML/TXT, which iter_images already skips, but excluding
+# them explicitly keeps the walk cheap and the debug output readable.
+exclude_globs:
+  - "**/*label*/**"
+  - "**/*annotation*/**"
+
+# Filenames are plain sequence numbers with no scene id, so group runs of 100
+# consecutive frames together. Splitting per-image would put near-identical
+# neighbouring frames in both train and val.
+group_bucket: 100
+
+preprocess:
+  # Every image is padded with a 100 px white border so boundary objects could
+  # be annotated. Left in, the model would waste capacity reproducing a frame.
+  # 840x712 -> 640x512 after cropping.
+  rgb:
+    crop_border: 100
+  thermal:
+    crop_border: 100
