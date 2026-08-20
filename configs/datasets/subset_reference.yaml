@@ -1,0 +1,43 @@
+# Thermal-only reference data inside the exported subset.
+#
+# Companion to subset.yaml. scripts/export_subset.py writes sources that have
+# no paired RGB (HIT-UAV) to `reference/<dataset>/thermal/`, and this spec picks
+# them up with `paired: false` so they land in split=reference and stay
+# available for unpaired FID.
+#
+# They need a separate spec because subset.yaml runs with `paired: true`, under
+# which a thermal image with no RGB partner is dropped -- which would quietly
+# remove the entire unpaired-FID reference set.
+
+name: subset_reference
+adapter: generic
+enabled: true
+paired: false
+
+# Every file here is thermal; the `reference/` and `<dataset>/` path components
+# carry no modality token to detect.
+force_modality: thermal
+
+viewpoint: uav_high
+sample_weight: 0.0            # never sampled during training
+
+search_roots:
+  - /kaggle/input/rgb-thermal-subset
+  - /kaggle/input/*thermal*subset*
+  - /kaggle/input/*rgb*thermal*subset*
+  - subset
+  - data/subset
+
+include_globs:
+  - "reference/**"
+
+dataset_from_regex: '/reference/([A-Za-z0-9_]+)/'
+
+viewpoint_map:
+  hituav: uav_high
+
+group_regex: '/([^/~]+)~\d+\.[A-Za-z]+$'
+group_bucket: 100
+
+preprocess:
+  thermal: {}

@@ -57,7 +57,17 @@ def test_extends_inherits_then_overrides():
 def test_shipped_dataset_specs_all_load():
     specs = load_dataset_specs(["configs/datasets/*.yaml"])
     names = {s.name for s in specs}
-    assert names == {"dronevehicle", "llvip", "flir_v2", "hituav"}
+    # The four Kaggle sources, plus the two specs describing an exported subset
+    # (see scripts/export_subset.py). The subset specs simply find nothing when
+    # no subset is attached.
+    assert names == {
+        "dronevehicle",
+        "llvip",
+        "flir_v2",
+        "hituav",
+        "subset",
+        "subset_reference",
+    }
 
 
 def test_hituav_is_configured_as_reference_only():
