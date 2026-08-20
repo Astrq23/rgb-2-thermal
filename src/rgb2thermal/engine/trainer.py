@@ -76,6 +76,38 @@ class Trainer:
         self.best_val_l1 = float("inf")
         self.stopwatch = Stopwatch()
         self.logger: Optional[CSVLogger] = None
+        self.images_seen = 0
+        self.epochs_done = 0
+
+    # ----------------------------------------------------------- time budget
+
+    def out_of_time(self) -> bool:
+        """True once the configured wall-clock budget is spent.
+
+        Kaggle kills a session at 12 hours with no warning and no checkpoint.
+        Stopping ourselves a little earlier turns that hard kill into an
+        ordinary end-of-epoch save -- the difference between resuming and
+        losing the epoch.
+        """
+        budget = self.cfg.train.max_hours
+        return bool(budget) and self.stopwatch.elapsed >= budget * 3600
+
+    def eta_hours(self) -> Optional[float]:
+        """Projected hours to finish the remaining epochs, from measured rate.
+
+        Available after the first epoch. This is what turns "will this fit in a
+        session?" from a guess into a number.
+        """
+        if not self.images_seen or self.stopwatch.elapsed <= 0:
+            return None
+        rate = self.images_seen / self.stopwatch.elapsed
+        if rate <= 0:
+            return None
+        per_epoch = self.cfg.data.samples_per_epoch or (
+            len(self.train_loader) * self.cfg.train.batch_size
+        )
+        remaining = max(0, self.cfg.train.epochs - self.epochs_done) * per_epoch
+        return remaining / rate / 3600
 
     # ------------------------------------------------------------- scheduling
 
@@ -154,9 +186,14 @@ class Trainer:
             f"batch={cfg.batch_size}  amp={cfg.amp}  output={self.output_dir}"
         )
 
+        if cfg.max_hours:
+            print(f"[trainer] wall-clock budget: {cfg.max_hours:.1f}h")
+
         stopped_early = False
+        stop_reason = ""
         for epoch in range(self.start_epoch, cfg.epochs):
             train_stats = self._train_epoch(epoch)
+            self.epochs_done = epoch + 1
             val_stats = self._validate(epoch) if self.val_loader is not None else {}
 
             self.scheduler_g.step()
@@ -180,17 +217,40 @@ class Trainer:
                 **val_stats,
             )
 
+            # Projected from measured throughput, so the call to shorten a run
+            # can be made after one epoch instead of after eight hours.
+            eta = self.eta_hours()
+            if eta is not None and epoch + 1 < cfg.epochs:
+                print(
+                    f"[trainer] epoch {epoch} done in {self.stopwatch.format()}  |  "
+                    f"{train_stats.get('train_img_per_s', 0):.0f} img/s  |  "
+                    f"~{eta:.1f}h for the remaining {cfg.epochs - epoch - 1} epoch(s)"
+                )
+
             if cfg.max_steps and self.global_step >= cfg.max_steps:
-                print(f"[trainer] reached max_steps={cfg.max_steps}, stopping")
+                stop_reason = f"reached max_steps={cfg.max_steps}"
+            elif self.out_of_time():
+                stop_reason = (
+                    f"wall-clock budget of {cfg.max_hours:.1f}h spent "
+                    f"({self.stopwatch.format()} elapsed)"
+                )
+
+            if stop_reason:
+                print(f"[trainer] {stop_reason} -- stopping cleanly at epoch {epoch}")
+                print("[trainer] continue the run later with:  --resume auto")
                 stopped_early = True
                 break
 
         return {
             "epochs_run": epoch - self.start_epoch + 1,
+            "epochs_completed": self.epochs_done,
+            "total_epochs": cfg.epochs,
             "global_step": self.global_step,
             "best_val_l1": self.best_val_l1,
             "output_dir": str(self.output_dir),
             "stopped_early": stopped_early,
+            "stop_reason": stop_reason,
+            "elapsed": self.stopwatch.format(),
         }
 
     def _train_epoch(self, epoch: int) -> dict[str, float]:
@@ -201,6 +261,7 @@ class Trainer:
 
         totals: dict[str, float] = {}
         seen = 0
+        epoch_start = self.stopwatch.elapsed
         max_steps = cfg.max_steps_per_epoch or len(self.train_loader)
         progress = tqdm(
             self.train_loader,
@@ -220,9 +281,12 @@ class Trainer:
                 totals[key] = totals.get(key, 0.0) + value
 
             if self.global_step % max(1, cfg.log_interval) == 0:
-                progress.set_postfix(
-                    {k: f"{v:.3f}" for k, v in stats.items() if k in ("g_l1", "g_gan", "d_total")}
-                )
+                postfix = {
+                    k: f"{v:.3f}" for k, v in stats.items() if k in ("g_l1", "g_gan", "d_total")
+                }
+                rate = (seen * cfg.batch_size) / max(1e-6, self.stopwatch.elapsed - epoch_start)
+                postfix["img/s"] = f"{rate:.0f}"
+                progress.set_postfix(postfix)
 
             if cfg.sample_interval and self.global_step % cfg.sample_interval == 0:
                 self._dump_samples(batch, tag=f"step{self.global_step:07d}")
@@ -230,8 +294,22 @@ class Trainer:
             if cfg.max_steps and self.global_step >= cfg.max_steps:
                 break
 
+            # Checked every 20 steps rather than every step: the budget is
+            # measured in hours, so finer granularity buys nothing.
+            if seen % 20 == 0 and self.out_of_time():
+                print(f"[trainer] time budget spent mid-epoch at step {self.global_step:,}")
+                break
+
         progress.close()
-        return {f"train_{k}": v / max(1, seen) for k, v in totals.items()}
+
+        epoch_seconds = max(1e-6, self.stopwatch.elapsed - epoch_start)
+        images = seen * cfg.batch_size
+        self.images_seen += images
+
+        stats = {f"train_{k}": v / max(1, seen) for k, v in totals.items()}
+        stats["train_img_per_s"] = images / epoch_seconds
+        stats["train_steps"] = float(seen)
+        return stats
 
     def _train_step(self, batch: dict[str, Any]) -> dict[str, float]:
         cfg = self.cfg.train

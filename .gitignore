@@ -1,14 +1,21 @@
-# Data & artifacts (never commit — datasets live on Kaggle)
-data/
-outputs/
-checkpoints/
-runs/
+# Data & run artifacts (datasets live on Kaggle, never in git).
+#
+# Leading slashes matter: an unanchored `data/` also matches
+# src/rgb2thermal/data/, which silently excluded the entire data layer from the
+# repository. Anchor every project-root artifact to the root.
+/data/
+/outputs/
+/predictions/
+/checkpoints/
+/runs/
+/subset/
+/manifest.csv
+
 *.pt
 *.pth
 *.ckpt
 *.npy
 *.npz
-manifest.csv
 
 # Python
 __pycache__/
