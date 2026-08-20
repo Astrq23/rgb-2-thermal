@@ -25,6 +25,10 @@ Ba notebook, chạy theo thứ tự:
 Notebook chỉ điều phối — toàn bộ code được `git clone` từ repo này. Sửa code thì
 sửa trong repo rồi chạy lại cell setup, **không dán code vào notebook**.
 
+> **Làm lần đầu?** Đọc [`docs/USAGE.md`](docs/USAGE.md) — hướng dẫn vận hành từng
+> bước, kèm bảng xử lý sự cố. Tài liệu này chỉ giải thích dự án *là gì* và *thiết
+> kế thế nào*.
+
 ---
 
 ## Dataset
